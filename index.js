@@ -13,7 +13,7 @@ const BLOCKED_KEYWORDS = [
 // 内网IP段检测
 const INTERNAL_IPS = [
   /^10\./, /^192\.168\./, /^172\.(1[6-9]|2[0-9]|3[01])\./,
-  /^127\./, /^169\.254\./, /^::1$/, /^fc/: /^fd/
+  /^127\./, /^169\.254\./, /^::1$/, /^fc/, /^fd/
 ];
 
 // 过期时间：24小时
@@ -143,7 +143,8 @@ export class WebhookInspectorDO {
       });
     }
 
-    return new Response('Not Found', { status: 404 });
+    // 其他请求都当作 webhook 接收
+    return this.receiveRequest(request);
   }
 }
 
