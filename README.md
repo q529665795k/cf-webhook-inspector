@@ -2,6 +2,12 @@
 
 轻量临时 Webhook 调试面板，基于 Cloudflare Worker + Durable Object。
 
+## 在线体验
+
+**👉 https://hook.808.qzz.io**
+
+打开自动生成一个监听地址，复制就能用，不用部署。
+
 ## 这是什么？
 
 一句话：**给你一个临时的接收地址，用来抓别人系统自动推过来的数据，调试用。**
@@ -44,7 +50,7 @@ wrangler deploy
 
 ## 使用方法
 
-1. 打开网站，自动跳转到一个监听页面，得到地址 `https://你的域名/abc123xyz`
+1. 打开 **https://hook.808.qzz.io**，自动跳转到一个监听页面，得到地址 `https://hook.808.qzz.io/abc123xyz`
 2. 把这个地址填到你要调试的 webhook 配置里
 3. 触发对方发请求，页面上实时显示请求内容
 4. 调试完直接关掉页面，24 小时后数据自动销毁
@@ -52,8 +58,8 @@ wrangler deploy
 ## 示例测试
 
 ```bash
-# 发个测试请求
-curl -X POST https://你的域名/abc123xyz \
+# 先发个请求到你的监听地址（替换成你自己的UUID）
+curl -X POST https://hook.808.qzz.io/你的UUID \
   -H "Content-Type: application/json" \
   -d '{"event":"test","data":"hello world"}'
 ```
