@@ -1,0 +1,14 @@
+name = "webhook-inspector"
+main = "index.js"
+compatibility_date = "2026-04-30"
+
+[[durable_objects.bindings]]
+name = "WEBHOOK_INSPECTOR"
+class_name = "WebhookInspectorDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WebhookInspectorDO"]
+
+[observability]
+enabled = false
