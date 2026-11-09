@@ -16,8 +16,8 @@ const INTERNAL_IPS = [
   /^127\./, /^169\.254\./, /^::1$/, /^fc/, /^fd/
 ];
 
-// 过期时间：24小时
-const EXPIRE_MS = 24 * 60 * 60 * 1000;
+// 过期时间：2小时
+const EXPIRE_MS = 2 * 60 * 60 * 1000;
 
 // ========== Durable Object ==========
 export class WebhookInspectorDO {
@@ -191,6 +191,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <button class="btn btn-danger" onclick="clearAll()">清空记录</button>
   </div>
   <div class="stats" id="stats"></div>
+  <div style="font-size:11px;color:#fbbf24;margin-bottom:12px;">⏱ 本监听地址有效期 2 小时，到期后自动销毁</div>
 </div>
 <div id="requestList">
   <div class="empty">等待请求...<br><small>把上面的地址填到你的webhook配置里</small></div>
