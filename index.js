@@ -148,6 +148,48 @@ export class WebhookInspectorDO {
   }
 }
 
+// ========== 统计 DO（只存数字，不存内容） ==========
+export class StatsDO {
+  constructor(state, env) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 计数：新建监听
+    if (url.pathname === '/hook/new') {
+      await this.state.storage.put('total_hooks', (await this.state.storage.get('total_hooks') || 0) + 1);
+      await this.state.storage.put(`hooks_${today}`, (await this.state.storage.get(`hooks_${today}`) || 0) + 1);
+      return new Response('ok');
+    }
+
+    // 计数：收到请求
+    if (url.pathname === '/hook/request') {
+      await this.state.storage.put('total_requests', (await this.state.storage.get('total_requests') || 0) + 1);
+      await this.state.storage.put(`reqs_${today}`, (await this.state.storage.get(`reqs_${today}`) || 0) + 1);
+      return new Response('ok');
+    }
+
+    // 获取统计数据
+    if (url.pathname === '/stats') {
+      const totalHooks = await this.state.storage.get('total_hooks') || 0;
+      const totalReqs = await this.state.storage.get('total_requests') || 0;
+      const todayHooks = await this.state.storage.get(`hooks_${today}`) || 0;
+      const todayReqs = await this.state.storage.get(`reqs_${today}`) || 0;
+      
+      return new Response(JSON.stringify({
+        totalHooks, totalReqs, todayHooks, todayReqs, today
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response('Not Found', { status: 404 });
+  }
+}
+
 // ========== 前端页面 HTML ==========
 const FRONTEND_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -284,19 +326,54 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // 管理员统计面板（密码保护）
+    if (path === '/admin') {
+      const auth = request.headers.get('Authorization') || '';
+      if (auth !== 'Bearer moyu2026') {
+        return new Response('需要密码', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
+        });
+      }
+      const statsObj = env.STATS.get(env.STATS.idFromName('main'));
+      const statsRes = await statsObj.fetch('http://stats/stats');
+      const stats = await statsRes.json();
+      
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>统计面板</title>
+<style>
+body{font-family:sans-serif;background:#0f0f0f;color:#eee;padding:20px}
+.card{background:#1a1a1a;border-radius:8px;padding:16px;margin-bottom:12px}
+.num{font-size:32px;font-weight:bold;color:#4ade80}
+.label{font-size:12px;color:#888;margin-top:4px}
+h1{font-size:18px;margin-bottom:16px}
+</style></head><body>
+<h1>📊 Webhook Inspector 统计</h1>
+<div class="card"><div class="num">${stats.totalHooks}</div><div class="label">总监听数</div></div>
+<div class="card"><div class="num">${stats.totalReqs}</div><div class="label">总请求数</div></div>
+<div class="card"><div class="num">${stats.todayHooks}</div><div class="label">今日新建监听</div></div>
+<div class="card"><div class="num">${stats.todayReqs}</div><div class="label">今日收到请求</div></div>
+<div style="font-size:11px;color:#666;margin-top:20px">日期: ${stats.today}</div>
+</body></html>`;
+      
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+
     // 首页：生成新的UUID，跳转到监听页面
     if (path === '/' || path === '/new') {
       const uuid = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+      // 计数：新建监听
+      const statsObj = env.STATS.get(env.STATS.idFromName('main'));
+      await statsObj.fetch('http://stats/hook/new');
       return Response.redirect(url.origin + '/' + uuid, 302);
     }
 
     // 监听页面
     const match = path.match(/^\/([a-zA-Z0-9]{8,32})$/);
     if (match && request.method === 'GET') {
-      const id = match[1];
-      const idObject = env.WEBHOOK_INSPECTOR.get(env.WEBHOOK_INSPECTOR.idFromName(id));
-      // 先确认DO存在
-      await idObject.fetch('http://internal/ping');
       return new Response(FRONTEND_HTML, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
@@ -315,6 +392,9 @@ export default {
     if (hookMatch) {
       const id = hookMatch[1];
       const idObject = env.WEBHOOK_INSPECTOR.get(env.WEBHOOK_INSPECTOR.idFromName(id));
+      // 计数：收到请求
+      const statsObj = env.STATS.get(env.STATS.idFromName('main'));
+      await statsObj.fetch('http://stats/hook/request');
       return idObject.fetch(request);
     }
 
