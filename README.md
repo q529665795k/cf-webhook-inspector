@@ -82,12 +82,12 @@ Workers（入口路由）
 Durable Object（每监听地址一个）
   ├─ requests[]   → 内存数组，最多 100 条，不落盘
   ├─ WebSocket    → 实时广播给页面
-  └─ setAlarm     → 2h 后 storage.deleteAll()
+  └─ setAlarm     → createdAt + 1h 后 deleteAll() 并写 expiredAt 墓碑
 Durable Object（STATS，单例）
   └─ 只累加计数：总数 / 今日数，按天切换
 ```
 
-**单文件 14KB，零依赖零构建**，`wrangler deploy` 一步上线。没有 npm 依赖树，没有框架。
+**单文件 27KB，零依赖零构建**，`wrangler deploy` 一步上线。没有 npm 依赖树，没有框架。
 
 ## 部署
 
@@ -97,7 +97,17 @@ wrangler login
 wrangler deploy
 ```
 
-需要两个 Durable Object 绑定（监听实例 + 统计实例），`wrangler.toml` 已带好配置结构，换成你自己的 `id_from_name` 即可。
+需要两个 Durable Object 绑定（监听实例 `WEBHOOK_INSPECTOR` + 统计实例 `STATS`），以及一个变量 `ADMIN_PASSWORD`。
+
+`ADMIN_PASSWORD` 用来访问 `/admin` 统计面板，**代码里不再硬编码任何密码**：
+
+```toml
+# wrangler.toml
+[vars]
+ADMIN_PASSWORD = "换成你自己的密码"
+```
+
+不配置这个变量时，`/admin` 一律返回 401（拿不到密码就无法进入），不会退化成默认密码。
 
 ## 用法
 
