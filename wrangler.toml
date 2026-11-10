@@ -6,9 +6,17 @@ compatibility_date = "2026-04-30"
 name = "WEBHOOK_INSPECTOR"
 class_name = "WebhookInspectorDO"
 
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "StatsDO"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["WebhookInspectorDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["StatsDO"]
 
 [observability]
 enabled = false
