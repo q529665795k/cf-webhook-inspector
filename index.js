@@ -514,7 +514,8 @@ export default {
       } else if (auth.startsWith('Bearer ')) {
         password = auth.slice(7);
       }
-      if (password !== 'moyu2026') {
+      const ADMIN_PASS = env.ADMIN_PASSWORD || '';
+      if (!ADMIN_PASS || password !== ADMIN_PASS) {
         return new Response('需要密码', {
           status: 401,
           headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
