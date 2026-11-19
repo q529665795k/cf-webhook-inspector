@@ -549,33 +549,6 @@ connect();
 
 // ========== Worker 主入口 ==========
 export default {
-  // 定时保活：每3分钟 ping Render 上的 NapCat，防止休眠
-  async scheduled(event, env, ctx) {
-    const targets = [
-      'https://napcat-bot.onrender.com/',
-      'https://napcat-bot.onrender.com:3000/',
-    ];
-    
-    const results = [];
-    for (const url of targets) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        const resp = await fetch(url, {
-          method: 'GET',
-          signal: controller.signal,
-          headers: { 'User-Agent': 'keepalive/1.0' }
-        });
-        clearTimeout(timeout);
-        results.push(`${url} -> ${resp.status}`);
-      } catch (e) {
-        results.push(`${url} -> ERROR: ${e.message}`);
-      }
-    }
-    
-    console.log('[keepalive]', new Date().toISOString(), results.join(' | '));
-  },
-
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
