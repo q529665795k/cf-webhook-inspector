@@ -3,7 +3,8 @@ main = "index.js"
 compatibility_date = "2026-04-30"
 
 [vars]
-# /admin 统计面板密码，必须设置，否则面板永远 401
+# 面板路径与密码，部署时自行填写，不要沿用默认值
+ADMIN_PATH = "/<管理面板路径>"
 ADMIN_PASSWORD = "change-me"
 
 [[durable_objects.bindings]]

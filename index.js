@@ -503,8 +503,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 管理员统计面板（密码保护）
-    if (path === '/admin') {
+    if (path === (env.ADMIN_PATH || '/<管理面板路径>')) {
       const auth = request.headers.get('Authorization') || '';
       // 兼容 Basic Auth 和 Bearer token
       let password = '';
