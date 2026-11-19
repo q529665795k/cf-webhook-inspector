@@ -340,6 +340,83 @@ export class StatsDO {
 }
 
 // ========== 前端页面 HTML ==========
+const GATE_HTML = `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verify · Webhook Inspector</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#0f0f0f;color:#eee;padding:56px 20px;line-height:1.7}
+.wrap{max-width:420px;margin:0 auto;text-align:center}
+h1{font-size:20px;margin:0 0 6px;font-weight:600}
+.sub{color:#8b8b8b;font-size:13px;margin:0 0 28px}
+.box{display:flex;justify-content:center;margin:0 0 18px}
+.btn{display:block;width:100%;border:0;cursor:pointer;font-family:inherit;text-align:center;background:#22c55e;color:#06210f;font-weight:600;font-size:16px;padding:15px;border-radius:10px}
+.btn:active{background:#16a34a}
+.foot{margin-top:22px;font-size:11px;color:#555}
+</style></head><body><div class="wrap">
+<h1>先确认一下</h1>
+<p class="sub">完成人机验证后即可进入调试面板</p>
+<form method="POST" action="/gate">
+<div class="box"><div class="cf-turnstile" data-sitekey="__SITEKEY__" data-theme="dark"></div></div>
+<button class="btn" type="submit">进入</button>
+</form>
+<p class="foot">Cloudflare Turnstile 保护，不收集输入内容</p>
+</div>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</body></html>`;
+
+const LANDING_HTML = `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Webhook Inspector</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#0f0f0f;color:#eee;padding:36px 20px;line-height:1.7}
+.wrap{max-width:560px;margin:0 auto}
+h1{font-size:24px;margin:0 0 8px}
+.sub{color:#888;font-size:14px;margin:0 0 26px}
+.btn{display:block;text-align:center;background:#22c55e;color:#06210f;font-weight:600;font-size:16px;padding:15px;border-radius:10px;text-decoration:none}
+.btn:active{background:#16a34a}
+.tips{margin:26px 0 0;padding:0;list-style:none;font-size:13px;color:#9ca3af}
+.tips li{margin:0 0 8px;padding-left:16px;position:relative}
+.tips li:before{content:"·";position:absolute;left:4px;color:#22c55e;font-weight:700}
+.foot{margin-top:28px;font-size:11px;color:#555}
+</style></head><body><div class="wrap">
+<h1>Webhook Inspector</h1>
+<p class="sub">临时地址抓回调数据，看完即焚。点下面的按钮才会生成新地址。</p>
+<form method="POST" action="/new">
+<div class="cf-turnstile" data-sitekey="__SITEKEY__" data-theme="dark" style="margin:0 0 14px"></div>
+<button class="btn" type="submit" style="border:0;width:100%;cursor:pointer;font-family:inherit">新建一个监听地址</button>
+</form>
+<ul class="tips">
+<li>地址有效期 1 小时，到期自动销毁，访问不续期</li>
+<li>请求内容只留内存，不落盘，不留副本</li>
+<li>限流：单 IP 10 分钟最多 10 个 · 单监听 10 次/秒 · 全站 60 次/秒</li>
+</ul>
+<p class="foot">仅用于开发调试，请勿承载真实敏感数据。</p>
+</div>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</body></html>`;
+
+// Turnstile 服务端校验：令牌一次性，校验通过才放行
+async function tsVerify(env, token, ip) {
+  if (!token) return false;
+  try {
+    const vr = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        secret: env.TURNSTILE_SECRET || '',
+        response: token,
+        remoteip: ip || ''
+      })
+    });
+    const vj = await vr.json();
+    return !!vj.success;
+  } catch (e) {
+    return false;
+  }
+}
+
 const FRONTEND_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -622,9 +699,65 @@ ${stats.napcatEvents?.length ? `<h1 style="margin-top:20px;font-size:16px">最�
     //   return statsObj.fetch(request);
     // }
 
-    // 首页：生成新的UUID，跳转到监听页面（受活跃监听上限约束）
-    if (path === '/' || path === '/new') {
+    const sitekey = env.TURNSTILE_SITEKEY || '';
+
+    // 第一道门：打开首页就要过人机验证，不显示任何按钮
+    if (path === '/') {
+      return new Response(GATE_HTML.replace('__SITEKEY__', sitekey), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, must-revalidate' }
+      });
+    }
+
+    // 进站验证通过后，才放出「新建监听」入口页
+    if (path === '/gate' && request.method === 'POST') {
       const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+      let gateToken = '';
+      try {
+        const form = await request.formData();
+        gateToken = String(form.get('cf-turnstile-response') || '');
+      } catch (e) {}
+      if (!(await tsVerify(env, gateToken, ip))) {
+        return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>验证未通过</title></head><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#eee;padding:40px 24px;max-width:640px;margin:0 auto;line-height:1.8"><h2 style="font-size:20px;margin:0 0 16px">人机验证未通过</h2><p style="color:#888;font-size:14px">验证已过期或未通过，请重新进站。</p><p style="color:#666;font-size:13px;margin:16px 0 0"><a style="color:#22c55e" href="/">重新验证</a></p></body></html>', {
+          status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
+      return new Response(LANDING_HTML.replace('__SITEKEY__', sitekey), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, must-revalidate' }
+      });
+    }
+
+    // GET /gate 不走验证，退回首页
+    if (path === '/gate') {
+      return Response.redirect(url.origin + '/', 302);
+    }
+
+    // 直接 GET /new 不建监听，退回首页（防脚本直刷）
+    if (path === '/new' && request.method !== 'POST') {
+      return Response.redirect(url.origin + '/', 302);
+    }
+
+    // 第二道门：手动点击并过人机验证后，才真正建监听
+    if (path === '/new' && request.method === 'POST') {
+      const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+
+      let tsToken = '';
+      try {
+        const form = await request.formData();
+        tsToken = String(form.get('cf-turnstile-response') || '');
+      } catch (e) {}
+      if (!tsToken) {
+        return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>验证未完成</title></head><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#eee;padding:40px 24px;max-width:640px;margin:0 auto;line-height:1.8"><h2 style="font-size:20px;margin:0 0 16px">人机验证未完成</h2><p style="color:#888;font-size:14px">请回到首页完成验证后再点一次。</p><p style="color:#666;font-size:13px;margin:16px 0 0"><a style="color:#22c55e" href="/">返回首页</a></p></body></html>', {
+          status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
+      if (!(await tsVerify(env, tsToken, ip))) {
+        return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>验证失败</title></head><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#eee;padding:40px 24px;max-width:640px;margin:0 auto;line-height:1.8"><h2 style="font-size:20px;margin:0 0 16px">人机验证未通过</h2><p style="color:#888;font-size:14px">验证已过期或未通过，请返回首页重试。</p><p style="color:#666;font-size:13px;margin:16px 0 0"><a style="color:#22c55e" href="/">返回首页</a></p></body></html>', {
+          status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      }
+
       const statsObj = env.STATS.get(env.STATS.idFromName('main'));
       const regRes = await statsObj.fetch('http://stats/hook/new', {
         method: 'POST',
@@ -636,7 +769,7 @@ ${stats.napcatEvents?.length ? `<h1 style="margin-top:20px;font-size:16px">最�
         const msg = reg.reason === 'too_many_ip'
           ? '创建太频繁：同一 IP 10 分钟内最多创建 10 个监听'
           : '监听已满：当前活跃监听已达 ' + reg.active + '/' + reg.max;
-        return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>已满</title></head><body style="font-family:sans-serif;background:#0f0f0f;color:#eee;padding:24px"><h2>' + msg + '</h2><p style="color:#888;font-size:14px">活跃监听：' + reg.active + '/' + reg.max + '</p><p><a style="color:#4ade80" href="/">重试</a></p></body></html>', {
+        return new Response('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>创建失败</title></head><body style="font-family:system-ui,sans-serif;background:#0f0f0f;color:#eee;padding:40px 24px;max-width:640px;margin:0 auto;line-height:1.8"><h2 style="font-size:20px;margin:0 0 16px">' + msg + '</h2><p style="color:#888;font-size:14px">活跃监听：' + reg.active + '/' + reg.max + '</p><p style="color:#666;font-size:13px;margin:16px 0 0"><a style="color:#22c55e" href="/">返回</a></p></body></html>', {
           status: 429, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '600' }
         });
       }

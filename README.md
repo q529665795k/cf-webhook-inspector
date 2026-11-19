@@ -55,6 +55,7 @@
 - 1 小时倒计时自动过期销毁（访问不续期，到期返回 410）
 - 内置 84 条敏感词黑名单，**Body 与 Headers 一起扫描**，命中静默丢弃
 - 四层限流：监听总量 / 单 IP 建监听频率 / 单监听 QPS / 全站 QPS
+- 两道人机验证：进站一道，新建监听再一道，打开首页不会自动建地址
 - 内置一个管理面板，只显示计数，不含任何请求内容（访问路径为占位符 `<管理面板路径>`，由部署者自行设定）
 - 手机端适配
 
@@ -97,7 +98,11 @@ wrangler deploy
 
 需要两个 Durable Object 绑定：监听实例 `WEBHOOK_INSPECTOR` 和统计实例 `STATS`。
 
-另外在 `wrangler.toml` 里要填两个变量：面板路径 `ADMIN_PATH`（占位符 `/＜管理面板路径＞`，换成你自己的）和面板密码 `ADMIN_PASSWORD`（换成你自己的），不要沿用默认值。
+另外在 `wrangler.toml` 里要填几个变量：面板路径 `ADMIN_PATH`（占位符 `/＜管理面板路径＞`，换成你自己的）、面板密码 `ADMIN_PASSWORD`、人机验证站点 `TURNSTILE_SITEKEY`，都换成自己的，不要沿用占位符。
+
+人机验证用的是 Cloudflare Turnstile，去后台建一个站点（模式选 managed，域名填你自己的域），拿到 sitekey 填进配置。**secret 不要写进任何文件**，用 `wrangler secret put TURNSTILE_SECRET` 单独注入。
+
+两道路径说明：打开 `/` 先过一次验证，通过后才看到「新建监听」按钮；点按钮再过一次验证才真正生成地址。`/new` 只接受 POST，直接 GET 会退回首页。
 
 ## 用法
 

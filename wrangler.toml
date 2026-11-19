@@ -6,6 +6,9 @@ compatibility_date = "2026-04-30"
 # 面板路径与密码，部署时自行填写，不要沿用默认值
 ADMIN_PATH = "/<管理面板路径>"
 ADMIN_PASSWORD = "change-me"
+# 人机验证：去 Cloudflare 后台建一个 Turnstile 站点，把 sitekey 填这里
+# secret 不要写进文件，用 wrangler secret put TURNSTILE_SECRET 单独注入
+TURNSTILE_SITEKEY = "<人机验证站点SiteKey>"
 
 [[durable_objects.bindings]]
 name = "WEBHOOK_INSPECTOR"
